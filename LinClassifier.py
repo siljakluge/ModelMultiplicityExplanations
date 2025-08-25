@@ -5,13 +5,13 @@ import matplotlib.pyplot as plt
 # Synthetic Data
 
 rng = np.random.default_rng(11)
-std = 0.4
+std = 0.1
 
 # class 1
-X1 = rng.normal(loc=(1, 1), scale=std, size=(100, 2))
+X1 = rng.normal(loc=(0.5, 0.5), scale=std, size=(100, 2))
 
 # class 2
-X2 = rng.normal(loc=(2, 2), scale=std, size=(100, 2))
+X2 = rng.normal(loc=(1.5, 1.5), scale=std, size=(100, 2))
 
 all_points = np.concatenate((X1, X2))
 
@@ -39,15 +39,16 @@ class LinClassifier:
 
 # classifier examples
 classifiers = [
-    LinClassifier(w=[1, 1], b=-3), #half
-    LinClassifier(w=[1,0], b=-1.5), #vertical
-    LinClassifier(w=[0,1], b=-1.5), #horizontal
-    LinClassifier(w=[0.5,1], b=-2)
+    LinClassifier(w=[1, 1], b=-2), #half
+    LinClassifier(w=[1,0], b=-1), #vertical
+    LinClassifier(w=[0,1], b=-1), #horizontal
+    LinClassifier(w=[0.5,1], b=-1.5),
+    LinClassifier(w=[0.75,1], b=-1.25)
 ]
 
 # test points
-point_1 = [1,1]
-point_2 = [2,2]
+point_1 = [0.5,0.5]
+point_2 = [1.5,1.5]
 
 # tests
 """for classifier in classifiers:
