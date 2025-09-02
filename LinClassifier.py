@@ -22,10 +22,12 @@ plt.plot([0.0, 2.0], [2.0, 0.0], label="Classifier 1", color="green")
 plt.axvline(x=1.0, label="Classifier 2", color="black")
 plt.axhline(y=1.0, label="Classifier 3", color="orange")
 plt.plot([0.0, 2.0], [1.5, 0.5], label="Classifier 4", color="blue")
-plt.plot([0.0, 2.0], [1.25, -0.25], label="Classifier 5", color="red")
+plt.plot([0.0, 2.0], [1.5, 0.0], label="Classifier 5", color="red")
 plt.xlim(left=0.0, right=2.0)
 plt.ylim(bottom=0.0, top=2.0)
 plt.legend(loc='upper left', bbox_to_anchor=(1.02, 1), borderaxespad=0.)
+plt.xlabel("x0")
+plt.ylabel("x1")
 plt.tight_layout()
 plt.show()
 
@@ -60,7 +62,7 @@ classifiers = [
     LinClassifier(w=[1,0], b=-1), #vertical
     LinClassifier(w=[0,1], b=-1), #horizontal
     LinClassifier(w=[0.5,1], b=-1.5),
-    LinClassifier(w=[0.75,1], b=-1.25)
+    LinClassifier(w=[0.75,1], b=-1.5)
 ]
 
 # test points
@@ -131,4 +133,4 @@ for classifier in classifiers:
     explainer = shap.KernelExplainer(predict_fn, sample)
     shap_values = explainer.shap_values(all_points)
     print(classifier.getName())
-    shap.summary_plot(shap_values, all_points, feature_names=["x", "y"])
+    shap.summary_plot(shap_values, all_points, feature_names=["x0", "x1"])
