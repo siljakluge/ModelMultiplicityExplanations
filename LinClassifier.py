@@ -133,4 +133,4 @@ for classifier in classifiers:
     explainer = shap.KernelExplainer(predict_fn, sample)
     shap_values = explainer.shap_values(all_points)
     print(classifier.getName())
-    shap.summary_plot(shap_values, all_points, feature_names=["x0", "x1"])
+    shap.summary_plot(shap_values, all_points, feature_names=["x0", "x1"], sort=False)
