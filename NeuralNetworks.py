@@ -18,7 +18,7 @@ num_cols = X.columns.tolist()
 pre = ColumnTransformer([("num", StandardScaler(), num_cols)], remainder="drop")
 
 def create_mlp():
-    classifier = MLPClassifier(hidden_layer_sizes=(100,8), early_stopping=True)
+    classifier = MLPClassifier(hidden_layer_sizes=(32,16), early_stopping=True)
     return Pipeline([("pre", pre), ("clf", classifier)])
 
 def rashomon_set(X, y, n_models=50, tolerance=0.01, base_seed=11):
@@ -54,7 +54,7 @@ def ambiguity(classifiers, points):
     return float(disagrees.mean())
 
 # Test
-rashomon_models, (X_val, y_val), acc = rashomon_set(X, y, n_models=50, tolerance=0.01, base_seed=11)
+rashomon_models, (X_val, y_val), acc = rashomon_set(X, y, n_models=100, tolerance=0.015, base_seed=11)
 print("Models:", len(rashomon_models))
 print("Best Accuracy:", acc.round(4))
 print("Ambiguity:", round(ambiguity(rashomon_models, X_val), 4))
@@ -93,3 +93,5 @@ Models: 2
 Best Accuracy 0.9649
 Ambiguity: 0.0175
 """
+
+#TODO Training acc
