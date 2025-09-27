@@ -137,5 +137,6 @@ Beobachtungen:
 - Explanation Variability ist extrem klein
 - Keine Korrelation bisher
 - Laptop deutlich schneller
+- Hey
 """
 
