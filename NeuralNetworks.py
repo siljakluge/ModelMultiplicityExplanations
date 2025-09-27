@@ -80,26 +80,59 @@ shap_values_all = []
 for model in rashomon_models:
     explainer = shap.KernelExplainer(model.predict_proba, sample)
     shap_values = explainer.shap_values(conflict_data)
-    shap_values_all.append(shap_values[1])
+
+    # API workaround with ChatGPT:
+    # handle both SHAP APIs
+    if isinstance(shap_values, list) or (hasattr(shap_values, '__len__') and hasattr(shap_values, 'append') and not hasattr(shap_values, 'values')):
+        # old API: list per class
+        shap_pos = shap_values[1]  # (N, F)
+    else:
+        # new API: Explanation with .values of shape (N, F, C)
+        vals = getattr(shap_values, "values", shap_values)  # some versions return the array directly
+        shap_pos = vals[..., 1]  # (N, F)  <-- select positive class
+
+    shap_values_all.append(shap_pos)
 
 shap_values_all = np.array(shap_values_all)
+print(shap_values_all.shape)
+
+# Range:
+shap_min = shap_values_all.min(axis=0)
+shap_max = shap_values_all.max(axis=0)
+feature_ranges = shap_max - shap_min
+# vielleicht nicht ganz so optimal? ist über alle features gemittelt
+average_range = feature_ranges.mean(axis=1)
 
 # Varaibility
 explanation_var = shap_values_all.var(axis=0).mean(axis=1)
 
-#Plot
+print(len(average_range))
+print(len(explanation_var))
+#Plots
+
+plt.scatter(final_rate, average_range, alpha=0.5)
+plt.xlabel("Conflict Rate")
+plt.ylabel("SHAP Explanation Range")
+plt.title("RANGE: Num. Models: " + str(len(rashomon_models))
+          + ", Accuracy: " + str(acc.round(4))
+          + ", Num. conflicting Points: " + str(len(conflict_data)))
+plt.show()
+
+
 plt.scatter(final_rate, explanation_var, alpha=0.5)
 plt.xlabel("Conflict Rate")
 plt.ylabel("SHAP Explanation variability")
-plt.title("Number of Models: " + str(len(rashomon_models))
-          + ", Best Accuracy: " + str(acc.round(4))
-          + ", Number of conflicting Points: " + str(len(conflict_data)))
+plt.title("VARIABILITY: Num. Models: " + str(len(rashomon_models))
+          + ", Accuracy: " + str(acc.round(4))
+          + ", Num. Points: " + str(len(conflict_data)))
 plt.show()
 
+# TODO Vorzeichenwechsel von SHAP Werten
 """
 Beobachtungen: 
 - immer unterschiedliche Modelle
 - Explanation Variability ist extrem klein
 - Keine Korrelation bisher
+- Laptop deutlich schneller
 """
 
