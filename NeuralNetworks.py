@@ -12,6 +12,7 @@ from folktables import ACSDataSource, ACSEmployment
 data_source = ACSDataSource(survey_year='2018', horizon='1-Year', survey='person')
 acs_data = data_source.get_data(states=["AL"], download=True)
 features, label, group = ACSEmployment.df_to_numpy(acs_data)
+feature_names = ACSEmployment.features
 
 def create_mlp():
     classifier = MLPClassifier(hidden_layer_sizes=(64,32), early_stopping=True)
@@ -66,7 +67,7 @@ print("Models:", len(rashomon_models))
 print("Best Accuracy:", acc.round(4))
 print("Ambiguity:", round(ambiguity(rashomon_models, X_val), 4))
 
-datapoint_subset = X_val[:1000]
+datapoint_subset = X_val[:100]
 rate, indices = conflict_rate(rashomon_models, datapoint_subset)
 
 final_rate = rate[indices]
@@ -94,31 +95,33 @@ for model in rashomon_models:
     shap_values_all.append(shap_pos)
 
 shap_values_all = np.array(shap_values_all)
-print(shap_values_all.shape)
 
 # Range:
 shap_min = shap_values_all.min(axis=0)
 shap_max = shap_values_all.max(axis=0)
 feature_ranges = shap_max - shap_min
+max_range = feature_ranges.max(axis=1).max()
+print("Max SHAP Range: ", round(max_range, 4))
+
 # vielleicht nicht ganz so optimal? ist über alle features gemittelt
-average_range = feature_ranges.mean(axis=1)
+# average_range = feature_ranges.mean(axis=0)
+#average_range_points = feature_ranges.mean(axis=1)
 
-# Varaibility
-explanation_var = shap_values_all.var(axis=0).mean(axis=1)
+# Variability
+explanation_var = shap_values_all.var(axis=0)
 
-print(len(average_range))
-print(len(explanation_var))
 #Plots
+for feat_idx in range(feature_ranges.shape[1]):
+    plt.scatter(final_rate, feature_ranges[:, feat_idx], alpha=0.5)
+    plt.xlim(0, 0.5)
+    plt.ylim(0, max_range)
+    plt.xlabel("Conflict Rate")
+    plt.ylabel("SHAP Explanation Range")
+    plt.title(f"{feature_names[feat_idx]} | Num. Models: {len(rashomon_models)} | "
+              f"Accuracy: {acc.round(4)} | Num. conflicting Points: {len(conflict_data)}")
+    plt.show()
 
-plt.scatter(final_rate, average_range, alpha=0.5)
-plt.xlabel("Conflict Rate")
-plt.ylabel("SHAP Explanation Range")
-plt.title("RANGE: Num. Models: " + str(len(rashomon_models))
-          + ", Accuracy: " + str(acc.round(4))
-          + ", Num. conflicting Points: " + str(len(conflict_data)))
-plt.show()
-
-
+"""
 plt.scatter(final_rate, explanation_var, alpha=0.5)
 plt.xlabel("Conflict Rate")
 plt.ylabel("SHAP Explanation variability")
@@ -126,7 +129,7 @@ plt.title("VARIABILITY: Num. Models: " + str(len(rashomon_models))
           + ", Accuracy: " + str(acc.round(4))
           + ", Num. Points: " + str(len(conflict_data)))
 plt.show()
-
+"""
 # TODO Vorzeichenwechsel von SHAP Werten
 """
 Beobachtungen: 
