@@ -6,6 +6,7 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import make_pipeline
 import numpy as np
+import os
 
 from folktables import ACSDataSource, ACSEmployment
 
@@ -36,7 +37,7 @@ def rashomon_set(n_models=50, tolerance=0.01, base_seed=11):
         accuracies.append(acc_score)
         train_accs.append(train_score)
 
-    print(train_accs)
+    print("Training Accuracies: ", train_accs)
     accs = np.array(accuracies)
     best_acc = accs.max()
     threshold = best_acc - tolerance
@@ -62,37 +63,27 @@ def conflict_rate(classifiers, points):
     conflict_indices = np.where(rate > 0)[0]
     return rate, conflict_indices
 
-rashomon_models, (X_val, y_val), acc = rashomon_set(n_models=5, tolerance=0.015, base_seed=11)
+rashomon_models, (X_val, y_val), acc = rashomon_set(n_models=20, tolerance=0.015, base_seed=11)
 print("Models:", len(rashomon_models))
 print("Best Accuracy:", acc.round(4))
 print("Ambiguity:", round(ambiguity(rashomon_models, X_val), 4))
 
-datapoint_subset = X_val[:100]
+idx = np.random.choice(len(X_val), size=1000, replace=False)
+datapoint_subset = X_val[idx]
 rate, indices = conflict_rate(rashomon_models, datapoint_subset)
 
 final_rate = rate[indices]
-conflict_data = X_val[indices]
+conflict_data = datapoint_subset[indices]
 print("Number of conflicting points:", len(conflict_data))
 
 # SHAP
-sample = shap.sample(X_val, 50)
+sample = shap.sample(X_val, 100)
 
 shap_values_all = []
 for model in rashomon_models:
-    explainer = shap.KernelExplainer(model.predict_proba, sample)
+    explainer = shap.KernelExplainer(model.predict, sample)
     shap_values = explainer.shap_values(conflict_data)
-
-    # API workaround with ChatGPT:
-    # handle both SHAP APIs
-    if isinstance(shap_values, list) or (hasattr(shap_values, '__len__') and hasattr(shap_values, 'append') and not hasattr(shap_values, 'values')):
-        # old API: list per class
-        shap_pos = shap_values[1]  # (N, F)
-    else:
-        # new API: Explanation with .values of shape (N, F, C)
-        vals = getattr(shap_values, "values", shap_values)  # some versions return the array directly
-        shap_pos = vals[..., 1]  # (N, F)  <-- select positive class
-
-    shap_values_all.append(shap_pos)
+    shap_values_all.append(shap_values)
 
 shap_values_all = np.array(shap_values_all)
 
@@ -103,40 +94,43 @@ feature_ranges = shap_max - shap_min
 max_range = feature_ranges.max(axis=1).max()
 print("Max SHAP Range: ", round(max_range, 4))
 
-# vielleicht nicht ganz so optimal? ist über alle features gemittelt
-# average_range = feature_ranges.mean(axis=0)
-#average_range_points = feature_ranges.mean(axis=1)
-
 # Variability
 explanation_var = shap_values_all.var(axis=0)
+max_var = explanation_var.max(axis=1).max()
+print("Max Var: ", round(max_var, 4))
 
 #Plots
+os.makedirs("plots_VAR", exist_ok=True)
+os.makedirs("plots_RANGE", exist_ok=True)
+
 for feat_idx in range(feature_ranges.shape[1]):
+    plt.figure()
     plt.scatter(final_rate, feature_ranges[:, feat_idx], alpha=0.5)
-    plt.xlim(0, 0.5)
-    plt.ylim(0, max_range)
     plt.xlabel("Conflict Rate")
     plt.ylabel("SHAP Explanation Range")
-    plt.title(f"{feature_names[feat_idx]} | Num. Models: {len(rashomon_models)} | "
-              f"Accuracy: {acc.round(4)} | Num. conflicting Points: {len(conflict_data)}")
-    plt.show()
+    plt.xlim(0, 0.5)
+    plt.ylim(0, max_range)
+    plt.title(f"Feature {feature_names[feat_idx]}")
 
-"""
-plt.scatter(final_rate, explanation_var, alpha=0.5)
-plt.xlabel("Conflict Rate")
-plt.ylabel("SHAP Explanation variability")
-plt.title("VARIABILITY: Num. Models: " + str(len(rashomon_models))
-          + ", Accuracy: " + str(acc.round(4))
-          + ", Num. Points: " + str(len(conflict_data)))
-plt.show()
-"""
+    filename = f"plots_RANGE/{feature_names[feat_idx]}.png"
+    plt.savefig(filename, dpi=300, bbox_inches="tight")
+    plt.close()
+
+for feat_idx in range(explanation_var.shape[1]):
+    plt.figure()
+    plt.scatter(final_rate, explanation_var[:, feat_idx], alpha=0.5)
+    plt.xlabel("Conflict Rate")
+    plt.ylabel("SHAP Explanation variability")
+    plt.xlim(0, 0.5)
+    plt.ylim(0, max_var)
+    plt.title(f"Feature {feature_names[feat_idx]}")
+
+    filename = f"plots_VAR/{feature_names[feat_idx]}.png"
+    plt.savefig(filename, dpi=300, bbox_inches="tight")
+    plt.close()
+
 # TODO Vorzeichenwechsel von SHAP Werten
 """
 Beobachtungen: 
-- immer unterschiedliche Modelle
-- Explanation Variability ist extrem klein
-- Keine Korrelation bisher
-- Laptop deutlich schneller
-- Hey
-"""
 
+"""
