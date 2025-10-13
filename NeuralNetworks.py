@@ -17,7 +17,7 @@ features, label, group = ACSEmployment.df_to_numpy(acs_data)
 feature_names = ACSEmployment.features
 
 # anpassen:
-n_models = 15
+n_models = 10
 n_datapoints = 500
 n_shap_samples = 100
 no_conflict_shap = True
