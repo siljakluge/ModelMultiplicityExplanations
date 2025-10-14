@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 import shap
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
@@ -17,11 +18,11 @@ features, label, group = ACSEmployment.df_to_numpy(acs_data)
 feature_names = ACSEmployment.features
 
 # anpassen:
-n_models = 10
+n_models = 100
 n_datapoints = 500
 n_shap_samples = 100
 no_conflict_shap = True
-save_data = False
+save_data = True
 load_previous_data = False
 
 def create_mlp():
@@ -113,9 +114,11 @@ else:
     print(shap_values_all.shape)
 
 # VZ-Wechsel
-has_pos = (shap_values_all > 0).any(axis=0)
-has_neg = (shap_values_all < 0).any(axis=0)
-sign_change = has_pos & has_neg
+frac_pos = (shap_values_all > 0).mean(axis=0)
+sign_intensity = np.minimum(frac_pos, 1 - frac_pos)
+sign_intensity_norm = sign_intensity * 2
+cmap = mcolors.LinearSegmentedColormap.from_list("signchange", ["green", "yellow", "red"])
+norm = mcolors.Normalize(vmin=0, vmax=1)  # 0 = grün, 1 = rot
 
 # Range:
 shap_min = shap_values_all.min(axis=0)
@@ -142,50 +145,67 @@ os.makedirs("plots_RANGE", exist_ok=True)
 
 # Explanation Range Plot
 for feat_idx in range(feature_ranges.shape[1]):
-    correlation = np.corrcoef(final_rate, feature_ranges[:, feat_idx])[0, 1]
-    colors = np.where(sign_change[:, feat_idx], "red", "green")
+    x = np.asarray(final_rate).reshape(-1)
+    y = feature_ranges[:, feat_idx]
 
-    plt.figure()
-    plt.scatter(final_rate, feature_ranges[:, feat_idx], c=colors, alpha=0.5)
-    plt.xlabel("Conflict Rate")
-    plt.ylabel("SHAP Explanation Range")
-    plt.xlim(0, 0.5)
-    plt.ylim(0, max_range)
-    #plt.ylim(0, abs_max_feature[feat_idx])
-    plt.title(f"Feature {feature_names[feat_idx]}, (r = {correlation:.3f})")
+    corr = np.corrcoef(x, y)[0, 1] if (x.std()>0 and y.std()>0) else np.nan
 
-    ax = plt.gca()
-    ax.scatter([], [], c="red", label="Vorzeichenwechsel")
-    ax.scatter([], [], c="green", label="konstantes Vorzeichen")
-    ax.legend(loc="upper right", frameon=True)
+    fig, ax = plt.subplots()
+    sc = ax.scatter(
+        x, y,
+        c=sign_intensity_norm[:, feat_idx],
+        cmap=cmap, norm=norm,
+        alpha=0.6, edgecolor="k", linewidth=0.3
+    )
+    ax.set_xlabel("Conflict Rate")
+    ax.set_ylabel("SHAP Explanation Range")
+    ax.set_xlim(0, 0.5)
+    ax.set_ylim(0, max_range)
+    title = f"Feature {feature_names[feat_idx]}"
+    if np.isfinite(corr): title += f", (r = {corr:.3f})"
+    ax.set_title(title)
 
-    filename = f"plots_RANGE/{feat_idx}_{feature_names[feat_idx]}.png"
-    plt.savefig(filename, dpi=300, bbox_inches="tight")
-    plt.close()
+    cbar = fig.colorbar(sc, ax=ax)
+    cbar.set_label("Rate of sign changes")
+    cbar.set_ticks([0, 0.5, 1])
+    cbar.set_ticklabels(["0", ".25", ".5"])
+
+    fig.tight_layout()
+    fig.savefig(f"plots_RANGE/{feat_idx}_{feature_names[feat_idx]}.png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
 
 # Explanation Variability Plot
-for feat_idx in range(explanation_var.shape[1]):
-    correlation = np.corrcoef(final_rate, explanation_var[:, feat_idx])[0, 1]
-    colors = np.where(sign_change[:, feat_idx], "red", "green")
+for feat_idx in range(feature_ranges.shape[1]):
+    x = np.asarray(final_rate).reshape(-1)
+    y = explanation_var[:, feat_idx]
 
-    plt.figure()
-    plt.scatter(final_rate, explanation_var[:, feat_idx], c=colors, alpha=0.5)
-    plt.xlabel("Conflict Rate")
-    plt.ylabel("SHAP Explanation variability")
-    plt.xlim(0, 0.5)
-    plt.ylim(0, max_var)
-    plt.title(f"Feature {feature_names[feat_idx]}, (r = {correlation:.3f})")
+    corr = np.corrcoef(x, y)[0, 1] if (x.std()>0 and y.std()>0) else np.nan
 
-    ax = plt.gca()
-    ax.scatter([], [], c="red", label="Vorzeichenwechsel")
-    ax.scatter([], [], c="green", label="konstantes Vorzeichen")
-    ax.legend(loc="upper right", frameon=True)
+    fig, ax = plt.subplots()
+    sc = ax.scatter(
+        x, y,
+        c=sign_intensity_norm[:, feat_idx],
+        cmap=cmap, norm=norm,
+        alpha=0.6, edgecolor="k", linewidth=0.3
+    )
+    ax.set_xlabel("Conflict Rate")
+    ax.set_ylabel("SHAP Explanation variability")
+    ax.set_xlim(0, 0.5)
+    ax.set_ylim(0, max_var)
+    title = f"Feature {feature_names[feat_idx]}"
+    if np.isfinite(corr): title += f", (r = {corr:.3f})"
+    ax.set_title(title)
 
-    filename = f"plots_VAR/{feat_idx}_{feature_names[feat_idx]}.png"
-    plt.savefig(filename, dpi=300, bbox_inches="tight")
-    plt.close()
+    cbar = fig.colorbar(sc, ax=ax)
+    cbar.set_label("Rate of sign changes")
+    cbar.set_ticks([0, 0.5, 1])
+    cbar.set_ticklabels(["0", ".25", ".5"])
 
-# SHAP + Plot for no-conflict data:
+    fig.tight_layout()
+    fig.savefig(f"plots_VAR/{feat_idx}_{feature_names[feat_idx]}.png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+# mean absolut SHAP values für no conflict and conflict points
 if no_conflict_shap & (not load_previous_data):
     idx = np.random.choice(len(non_conflict_indices), size=100, replace=False)
     subset = non_conflict_data[idx]
@@ -206,9 +226,34 @@ if no_conflict_shap & (not load_previous_data):
     plt.bar(mean_abs_df["feature"], mean_abs_df["mean_abs_shap"])
     plt.xticks(rotation=90)
     plt.ylabel("Mean absolute SHAP")
+    plt.ylim(0, 0.25)
     plt.title("Mean absolute SHAP per feature for non-conflict points")
     os.makedirs("plots_MEAN_ABS", exist_ok=True)
     plt.tight_layout()
-    plt.savefig("plots_MEAN_ABS/mean_abs_shap_barplot.png", dpi=300, bbox_inches="tight")
+    plt.savefig("plots_MEAN_ABS/no_conflict_mean_abs_shap_barplot.png", dpi=300, bbox_inches="tight")
     plt.close()
 
+    mean_abs_shap_per_feature = np.mean(np.abs(shap_values_all), axis=(0, 1))
+    mean_abs_df = pd.DataFrame({
+            "feature": feature_names,
+            "mean_abs_shap": mean_abs_shap_per_feature
+        }).sort_values("mean_abs_shap", ascending=False)
+
+    plt.figure()
+    plt.bar(mean_abs_df["feature"], mean_abs_df["mean_abs_shap"])
+    plt.xticks(rotation=90)
+    plt.ylabel("Mean absolute SHAP")
+    plt.ylim(0, 0.25)
+    plt.title("Mean absolute SHAP per feature for conflict points")
+    plt.tight_layout()
+    plt.savefig("plots_MEAN_ABS/conflict_mean_abs_shap_barplot.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+if n_models <= 10:
+    for i, shap_vals in enumerate(shap_values_all):
+        shap.summary_plot(shap_vals, conflict_data, feature_names=feature_names, show=False)
+        plt.title(f"Model {i+1}")
+        os.makedirs("plots_SHAP_models", exist_ok=True)
+        plt.tight_layout()
+        plt.savefig(f"plots_SHAP_models/Model_{i+1}.png", dpi=300, bbox_inches="tight")
+        plt.close()
