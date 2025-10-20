@@ -18,12 +18,12 @@ features, label, group = ACSEmployment.df_to_numpy(acs_data)
 feature_names = ACSEmployment.features
 
 # anpassen:
-n_models = 100
+n_models = 10
 n_datapoints = 500
 n_shap_samples = 100
-no_conflict_shap = True
-save_data = True
-load_previous_data = False
+no_conflict_shap = False
+save_data = False
+load_previous_data = True
 
 def create_mlp():
     classifier = MLPClassifier(hidden_layer_sizes=(64,32), early_stopping=True)
@@ -119,6 +119,26 @@ sign_intensity = np.minimum(frac_pos, 1 - frac_pos)
 sign_intensity_norm = sign_intensity * 2
 cmap = mcolors.LinearSegmentedColormap.from_list("signchange", ["green", "yellow", "red"])
 norm = mcolors.Normalize(vmin=0, vmax=1)  # 0 = grün, 1 = rot
+
+# Heatmap
+row_labels = [str(i) for i in range(frac_pos.shape[0])]
+fig, ax = plt.subplots(figsize=(min(12, 1.0 + 0.4*frac_pos.shape[1]), 8))
+im = ax.imshow(frac_pos, aspect="auto", vmin=0, vmax=1, cmap="coolwarm")
+
+ax.set_title("Fraction of positive SHAP values per conflict points × feature")
+ax.set_xlabel("Features")
+ax.set_ylabel("Conflict Points")
+ax.set_xticks(np.arange(frac_pos.shape[1]))
+ax.set_xticklabels(feature_names, rotation=90)
+step = max(1, frac_pos.shape[0] // 25)
+ax.set_yticks(np.arange(0, frac_pos.shape[0], step))
+ax.set_yticklabels([row_labels[i] for i in range(0, frac_pos.shape[0], step)])
+cbar = fig.colorbar(im, ax=ax)
+cbar.set_label("Fraction of models with positive SHAP value (0–1)")
+fig.tight_layout()
+os.makedirs("plots", exist_ok=True)
+fig.savefig(f"plots/heatmap_signchange.png", dpi=300, bbox_inches="tight")
+plt.close(fig)
 
 # Range:
 shap_min = shap_values_all.min(axis=0)
@@ -228,9 +248,8 @@ if no_conflict_shap & (not load_previous_data):
     plt.ylabel("Mean absolute SHAP")
     plt.ylim(0, 0.25)
     plt.title("Mean absolute SHAP per feature for non-conflict points")
-    os.makedirs("plots_MEAN_ABS", exist_ok=True)
     plt.tight_layout()
-    plt.savefig("plots_MEAN_ABS/no_conflict_mean_abs_shap_barplot.png", dpi=300, bbox_inches="tight")
+    plt.savefig("plots/no_conflict_mean_abs_shap_barplot.png", dpi=300, bbox_inches="tight")
     plt.close()
 
     mean_abs_shap_per_feature = np.mean(np.abs(shap_values_all), axis=(0, 1))
@@ -246,10 +265,10 @@ if no_conflict_shap & (not load_previous_data):
     plt.ylim(0, 0.25)
     plt.title("Mean absolute SHAP per feature for conflict points")
     plt.tight_layout()
-    plt.savefig("plots_MEAN_ABS/conflict_mean_abs_shap_barplot.png", dpi=300, bbox_inches="tight")
+    plt.savefig("plots/conflict_mean_abs_shap_barplot.png", dpi=300, bbox_inches="tight")
     plt.close()
 
-if n_models <= 10:
+if n_models <= 10 & (not load_previous_data):
     for i, shap_vals in enumerate(shap_values_all):
         shap.summary_plot(shap_vals, conflict_data, feature_names=feature_names, show=False)
         plt.title(f"Model {i+1}")
