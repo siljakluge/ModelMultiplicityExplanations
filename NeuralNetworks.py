@@ -9,6 +9,7 @@ from sklearn.pipeline import make_pipeline
 import numpy as np
 import os
 import pandas as pd
+from scipy.stats import pearsonr
 
 from folktables import ACSDataSource, ACSEmployment
 
@@ -115,17 +116,16 @@ else:
 
 # VZ-Wechsel
 frac_pos = (shap_values_all > 0).mean(axis=0)
-sign_intensity = np.minimum(frac_pos, 1 - frac_pos)
-sign_intensity_norm = sign_intensity * 2
-cmap = mcolors.LinearSegmentedColormap.from_list("signchange", ["green", "yellow", "red"])
-norm = mcolors.Normalize(vmin=0, vmax=1)  # 0 = grün, 1 = rot
+disagreement = np.minimum(frac_pos, 1 - frac_pos)
+sign_instability = 2 * np.minimum(frac_pos, 1 - frac_pos)
 
-# Heatmap
+# Plot Heatmap
+cmap = mcolors.LinearSegmentedColormap.from_list("signinstability", ["green", "yellow", "red"])
+
 row_labels = [str(i) for i in range(frac_pos.shape[0])]
 fig, ax = plt.subplots(figsize=(min(12, 1.0 + 0.4*frac_pos.shape[1]), 8))
-im = ax.imshow(frac_pos, aspect="auto", vmin=0, vmax=1, cmap="coolwarm")
-
-ax.set_title("Fraction of positive SHAP values per conflict points × feature")
+im = ax.imshow(sign_instability, aspect="auto", vmin=0, vmax=1, cmap=cmap)
+ax.set_title("Sign Instability per conflict point × feature")
 ax.set_xlabel("Features")
 ax.set_ylabel("Conflict Points")
 ax.set_xticks(np.arange(frac_pos.shape[1]))
@@ -133,11 +133,15 @@ ax.set_xticklabels(feature_names, rotation=90)
 step = max(1, frac_pos.shape[0] // 25)
 ax.set_yticks(np.arange(0, frac_pos.shape[0], step))
 ax.set_yticklabels([row_labels[i] for i in range(0, frac_pos.shape[0], step)])
+
 cbar = fig.colorbar(im, ax=ax)
-cbar.set_label("Fraction of models with positive SHAP value (0–1)")
+cbar.set_label("Sign Instability (0 = stable, 0.5 = unstable)")
+cbar.set_ticks([0, 0.5, 1])
+cbar.set_ticklabels(["Stable", "Medium", "Unstable"])
+
 fig.tight_layout()
 os.makedirs("plots", exist_ok=True)
-fig.savefig(f"plots/heatmap_signchange.png", dpi=300, bbox_inches="tight")
+fig.savefig("plots/heatmap_sign_instability.png", dpi=300, bbox_inches="tight")
 plt.close(fig)
 
 # Range:
@@ -173,8 +177,8 @@ for feat_idx in range(feature_ranges.shape[1]):
     fig, ax = plt.subplots()
     sc = ax.scatter(
         x, y,
-        c=sign_intensity_norm[:, feat_idx],
-        cmap=cmap, norm=norm,
+        c=sign_instability[:, feat_idx],
+        cmap=cmap, norm=mcolors.Normalize(vmin=0, vmax=1),
         alpha=0.6, edgecolor="k", linewidth=0.3
     )
     ax.set_xlabel("Conflict Rate")
@@ -186,7 +190,7 @@ for feat_idx in range(feature_ranges.shape[1]):
     ax.set_title(title)
 
     cbar = fig.colorbar(sc, ax=ax)
-    cbar.set_label("Rate of sign changes")
+    cbar.set_label("Sign Instability")
     cbar.set_ticks([0, 0.5, 1])
     cbar.set_ticklabels(["0", ".25", ".5"])
 
@@ -204,8 +208,8 @@ for feat_idx in range(feature_ranges.shape[1]):
     fig, ax = plt.subplots()
     sc = ax.scatter(
         x, y,
-        c=sign_intensity_norm[:, feat_idx],
-        cmap=cmap, norm=norm,
+        c=sign_instability[:, feat_idx],
+        cmap=cmap,norm=mcolors.Normalize(vmin=0, vmax=1),
         alpha=0.6, edgecolor="k", linewidth=0.3
     )
     ax.set_xlabel("Conflict Rate")
@@ -217,13 +221,35 @@ for feat_idx in range(feature_ranges.shape[1]):
     ax.set_title(title)
 
     cbar = fig.colorbar(sc, ax=ax)
-    cbar.set_label("Rate of sign changes")
+    cbar.set_label("Sign Instability")
     cbar.set_ticks([0, 0.5, 1])
     cbar.set_ticklabels(["0", ".25", ".5"])
 
     fig.tight_layout()
     fig.savefig(f"plots_VAR/{feat_idx}_{feature_names[feat_idx]}.png", dpi=300, bbox_inches="tight")
     plt.close(fig)
+
+# Korrelationen:
+x_conflict = np.asarray(final_rate).reshape(-1)
+n_samples, n_features = disagreement.shape
+results = []
+for j, feat_name in enumerate(feature_names):
+    r_conflict_dis, _ = pearsonr(x_conflict, disagreement[:, j])
+    r_var_dis, _ = pearsonr(explanation_var[:, j], disagreement[:, j])
+    r_range_dis, _ = pearsonr(feature_ranges[:, j], disagreement[:, j])
+    r_conflict_var, _   = pearsonr(x_conflict, explanation_var[:, j])
+    r_conflict_range, _ = pearsonr(x_conflict, feature_ranges[:, j])
+    results.append({
+        "feature_name": feat_name,
+        "r_conflict_disagreement": round(r_conflict_dis, 4),
+        "r_var_disagreement": round(r_var_dis, 4),
+        "r_range_disagreement": round(r_range_dis, 4),
+        "r_conflict_variability": round(r_conflict_var, 4),
+        "r_conflict_range": round(r_conflict_range, 4),
+    })
+df_corr = pd.DataFrame(results)
+df_corr.to_csv("correlations.csv", index=False)
+
 
 # mean absolut SHAP values für no conflict and conflict points
 if no_conflict_shap & (not load_previous_data):
