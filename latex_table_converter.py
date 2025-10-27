@@ -8,6 +8,7 @@ rename_dict = {
     "r_range_disagreement": "r(range,dis)",
     "r_conflict_variability": "r(conflict,var)",
     "r_conflict_range": "r(conflict,range)",
+    "r_var_range": "r(var,range)",
 }
 df = df.rename(columns=rename_dict)
 latex_table = df.to_latex(

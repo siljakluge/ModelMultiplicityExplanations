@@ -181,7 +181,7 @@ for feat_idx in range(feature_ranges.shape[1]):
         cmap=cmap, norm=mcolors.Normalize(vmin=0, vmax=1),
         alpha=0.6, edgecolor="k", linewidth=0.3
     )
-    ax.set_xlabel("Conflict Rate")
+    ax.set_xlabel("Conflict Ratio")
     ax.set_ylabel("SHAP Explanation Range")
     ax.set_xlim(0, 0.5)
     ax.set_ylim(0, max_range)
@@ -212,7 +212,7 @@ for feat_idx in range(feature_ranges.shape[1]):
         cmap=cmap,norm=mcolors.Normalize(vmin=0, vmax=1),
         alpha=0.6, edgecolor="k", linewidth=0.3
     )
-    ax.set_xlabel("Conflict Rate")
+    ax.set_xlabel("Conflict Ratio")
     ax.set_ylabel("SHAP Explanation variability")
     ax.set_xlim(0, 0.5)
     ax.set_ylim(0, max_var)
@@ -239,6 +239,7 @@ for j, feat_name in enumerate(feature_names):
     r_range_dis, _ = pearsonr(feature_ranges[:, j], disagreement[:, j])
     r_conflict_var, _   = pearsonr(x_conflict, explanation_var[:, j])
     r_conflict_range, _ = pearsonr(x_conflict, feature_ranges[:, j])
+    r_var_range, _ = pearsonr(explanation_var[:, j], feature_ranges[:, j])
     results.append({
         "feature_name": feat_name,
         "r_conflict_disagreement": round(r_conflict_dis, 4),
@@ -246,6 +247,7 @@ for j, feat_name in enumerate(feature_names):
         "r_range_disagreement": round(r_range_dis, 4),
         "r_conflict_variability": round(r_conflict_var, 4),
         "r_conflict_range": round(r_conflict_range, 4),
+        "r_var_range": round(r_var_range, 4),
     })
 df_corr = pd.DataFrame(results)
 df_corr.to_csv("correlations.csv", index=False)
