@@ -2,11 +2,21 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-df = pd.read_csv("correlations.csv", index_col=0)
-feature_order = [
-    "AGEP", "SCHL", "RELP", "DIS", "SEX", "MIL", "MAR", "RAC1P",
-    "DREM", "ESP", "ANC", "MIG", "DEAR", "CIT", "NATIVITY", "DEYE"
-]
+dataset_name = "ACSEmployment"
+
+df = pd.read_csv(f"{dataset_name}_correlations.csv", index_col=0)
+if dataset_name == "ACSEmployment":
+    feature_order = [
+        "AGEP", "SCHL", "RELP", "DIS", "SEX", "MIL", "MAR", "RAC1P",
+        "DREM", "ESP", "ANC", "MIG", "DEAR", "CIT", "NATIVITY", "DEYE"
+    ]
+elif dataset_name == "ACSIncome":
+    feature_order = ['SCHL', 'SEX', 'WKHP', 'OCCP', 'AGEP', 'RELP', 'RAC1P', 'MAR', 'COW', 'POBP']
+elif dataset_name == "ACSPublicCoverage":
+    feature_order = [
+        'ESR', 'PINCP', 'DIS', 'SEX', 'SCHL', 'MAR', 'AGEP', 'MIL', 'FER', 'RAC1P',
+        'ESP', 'MIG', 'DREM', 'ANC', 'DEAR', 'DEYE', 'CIT', 'NATIVITY', 'ST'
+    ]
 
 df = df.loc[feature_order]
 
@@ -35,6 +45,6 @@ ax.xaxis.set_ticks_position('top')
 ax.xaxis.set_label_position('top')
 
 
-plt.title("Correlation Matrix", fontsize=14, pad=60)
+plt.title(f"Correlation Matrix {dataset_name}", fontsize=14, pad=60)
 plt.tight_layout()
 plt.show()

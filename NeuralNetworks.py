@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import shap
+from pandas.io.sas.sas_constants import dataset_length
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 from sklearn.neural_network import MLPClassifier
@@ -11,20 +12,58 @@ import os
 import pandas as pd
 from scipy.stats import pearsonr
 
-from folktables import ACSDataSource, ACSEmployment
+from folktables import ACSDataSource, ACSEmployment, ACSIncome, ACSPublicCoverage
 
 data_source = ACSDataSource(survey_year='2018', horizon='1-Year', survey='person')
 acs_data = data_source.get_data(states=["AL"], download=True)
+"""
+all runs:
+n_models = 100
+n_datapoints = 500
+n_shap_samples = 100
+-----------------------------------------------------------------
+ACSEmployment:
+Models: 100
+Best Accuracy: 0.8231
+Ambiguity: 0.1788
+Number of conflicting points: 94
+
 features, label, group = ACSEmployment.df_to_numpy(acs_data)
 feature_names = ACSEmployment.features
+dataset_name = "ACSEmployment"
+-----------------------------------------------------------------
+ACSIncome:
+Models: 98
+Best Accuracy: 0.8112
+Ambiguity: 0.1771
+Number of conflicting points: 83
+
+features, label, group = ACSIncome.df_to_numpy(acs_data)
+feature_names = ACSIncome.features
+dataset_name = "ACSIncome"
+-----------------------------------------------------------------
+ACSPublicCoverage:
+Models: 98
+Best Accuracy: 0.8489
+Ambiguity: 0.193
+Number of conflicting points: 87
+
+features, label, group = ACSPublicCoverage.df_to_numpy(acs_data)
+feature_names = ACSPublicCoverage.features
+dataset_name = "ACSPublicCoverage"
+-----------------------------------------------------------------
+"""
+features, label, group = ACSIncome.df_to_numpy(acs_data)
+feature_names = ACSIncome.features
+dataset_name = "ACSIncome"
 
 # anpassen:
-n_models = 10
+n_models = 100
 n_datapoints = 500
 n_shap_samples = 100
 no_conflict_shap = False
-save_data = False
-load_previous_data = True
+save_data = True
+load_previous_data = False
 
 def create_mlp():
     classifier = MLPClassifier(hidden_layer_sizes=(64,32), early_stopping=True)
@@ -75,8 +114,16 @@ def conflict_rate(classifiers, points):
     return rate, conflict_indices
 
 if load_previous_data:
-    shap_values_all = np.load("previous data/shap_values_all.npy")
-    final_rate = np.load("previous data/conflict_rate.npy")
+    if dataset_name == "ACSEmployment":
+        shap_values_all = np.load("ACSEmployment_previous data/shap_values_all.npy")
+        final_rate = np.load("ACSEmployment_previous data/conflict_rate.npy")
+    elif dataset_name == "ACSIncome":
+        shap_values_all = np.load("ACSIncome_previous data/shap_values_all.npy")
+        final_rate = np.load("ACSIncome_previous data/conflict_rate.npy")
+    elif dataset_name == "ACSPublicCoverage":
+        shap_values_all = np.load("ACSPublicCoverage_previous data/shap_values_all.npy")
+        final_rate = np.load("ACSPublicCoverage_previous data/conflict_rate.npy")
+
 else:
     rashomon_models, (X_val, y_val), acc = rashomon_set(n_models=n_models, tolerance=0.015, base_seed=11)
     print("Models:", len(rashomon_models))
@@ -89,8 +136,8 @@ else:
 
     final_rate = rate[indices]
     if save_data:
-        os.makedirs("previous data", exist_ok=True)
-        np.save("previous data/conflict_rate.npy", final_rate)
+        os.makedirs(f"{dataset_name}_previous data", exist_ok=True)
+        np.save(f"{dataset_name}_previous data/conflict_rate.npy", final_rate)
     conflict_data = datapoint_subset[indices]
     print("Number of conflicting points:", len(conflict_data))
 
@@ -109,30 +156,55 @@ else:
         shap_values_all.append(shap_values)
 
     if save_data:
-        np.save("previous data/shap_values_all.npy", shap_values_all)
+        np.save(f"{dataset_name}_previous data/shap_values_all.npy", shap_values_all)
 
     shap_values_all = np.array(shap_values_all)
     print(shap_values_all.shape)
+
+# plot mean absolut SHAP values für conflict points
+os.makedirs(f"{dataset_name}_plots", exist_ok=True)
+mean_abs_shap_per_feature = np.mean(np.abs(shap_values_all), axis=(0, 1))
+mean_abs_df = pd.DataFrame({
+    "feature": feature_names,
+    "mean_abs_shap": mean_abs_shap_per_feature
+}).sort_values("mean_abs_shap", ascending=False)
+
+plt.figure()
+plt.bar(mean_abs_df["feature"], mean_abs_df["mean_abs_shap"])
+plt.xticks(rotation=90)
+plt.ylabel("Mean absolute SHAP")
+plt.ylim(0, 0.25)
+plt.title(f" {dataset_name}: Mean absolute SHAP per feature for conflict points")
+plt.tight_layout()
+plt.savefig(f"{dataset_name}_plots/conflict_mean_abs_shap_barplot.png", dpi=300, bbox_inches="tight")
+plt.close()
 
 # VZ-Wechsel
 frac_pos = (shap_values_all > 0).mean(axis=0)
 disagreement = np.minimum(frac_pos, 1 - frac_pos)
 sign_instability = 2 * np.minimum(frac_pos, 1 - frac_pos)
 
-# Plot Heatmap
+# sort according to mean abs shap value
+sorted_features = mean_abs_df["feature"].values
+print("sorted_features:", sorted_features)
+sort_idx = [feature_names.index(f) for f in sorted_features]
+sign_instability_sorted = sign_instability[:, sort_idx]
+frac_pos_sorted = frac_pos[:, sort_idx]
+
+# Plot Heatmap Sign Instability:
 cmap = mcolors.LinearSegmentedColormap.from_list("signinstability", ["green", "yellow", "red"])
 
-row_labels = [str(i) for i in range(frac_pos.shape[0])]
-fig, ax = plt.subplots(figsize=(min(12, 1.0 + 0.4*frac_pos.shape[1]), 8))
-im = ax.imshow(sign_instability, aspect="auto", vmin=0, vmax=1, cmap=cmap)
-ax.set_title("Sign Instability per conflict point × feature")
+row_labels = [str(i) for i in range(frac_pos_sorted.shape[0])]
+fig, ax = plt.subplots(figsize=(min(12, 1.0 + 0.4*frac_pos_sorted.shape[1]), 8))
+im = ax.imshow(sign_instability_sorted, aspect="auto", vmin=0, vmax=1, cmap=cmap)
+ax.set_title(f"{dataset_name}: Sign Instability per conflict point × feature")
 ax.set_xlabel("Features")
 ax.set_ylabel("Conflict Points")
-ax.set_xticks(np.arange(frac_pos.shape[1]))
-ax.set_xticklabels(feature_names, rotation=90)
-step = max(1, frac_pos.shape[0] // 25)
-ax.set_yticks(np.arange(0, frac_pos.shape[0], step))
-ax.set_yticklabels([row_labels[i] for i in range(0, frac_pos.shape[0], step)])
+ax.set_xticks(np.arange(frac_pos_sorted.shape[1]))
+ax.set_xticklabels(sorted_features, rotation=90)
+step = max(1, frac_pos_sorted.shape[0] // 25)
+ax.set_yticks(np.arange(0, frac_pos_sorted.shape[0], step))
+ax.set_yticklabels([row_labels[i] for i in range(0, frac_pos_sorted.shape[0], step)])
 
 cbar = fig.colorbar(im, ax=ax)
 cbar.set_label("Sign Instability (0 = stable, 0.5 = unstable)")
@@ -140,8 +212,7 @@ cbar.set_ticks([0, 0.5, 1])
 cbar.set_ticklabels(["Stable", "Medium", "Unstable"])
 
 fig.tight_layout()
-os.makedirs("plots", exist_ok=True)
-fig.savefig("plots/heatmap_sign_instability.png", dpi=300, bbox_inches="tight")
+fig.savefig(f"{dataset_name}_plots/heatmap_sign_instability.png", dpi=300, bbox_inches="tight")
 plt.close(fig)
 
 # Range:
@@ -158,16 +229,13 @@ shap_max_feature = shap_max.max(axis=0)
 abs_max_feature = np.maximum(np.abs(shap_min_feature), np.abs(shap_max_feature))
 print("abs max feature: ", abs_max_feature)
 
-# Variability
+# Variance
 explanation_var = shap_values_all.var(axis=0)
 max_var = explanation_var.max(axis=1).max()
 print("Max Var: ", round(max_var, 4))
 
-#Plots
-os.makedirs("plots_VAR", exist_ok=True)
-os.makedirs("plots_RANGE", exist_ok=True)
-
 # Explanation Range Plot
+os.makedirs(f"{dataset_name}_plots_RANGE", exist_ok=True)
 for feat_idx in range(feature_ranges.shape[1]):
     x = np.asarray(final_rate).reshape(-1)
     y = feature_ranges[:, feat_idx]
@@ -195,10 +263,11 @@ for feat_idx in range(feature_ranges.shape[1]):
     cbar.set_ticklabels(["0", ".25", ".5"])
 
     fig.tight_layout()
-    fig.savefig(f"plots_RANGE/{feat_idx}_{feature_names[feat_idx]}.png", dpi=300, bbox_inches="tight")
+    fig.savefig(f"{dataset_name}_plots_RANGE/{feat_idx}_{feature_names[feat_idx]}.png", dpi=300, bbox_inches="tight")
     plt.close(fig)
 
-# Explanation Variability Plot
+# Explanation Variance Plot
+os.makedirs(f"{dataset_name}_plots_VAR", exist_ok=True)
 for feat_idx in range(feature_ranges.shape[1]):
     x = np.asarray(final_rate).reshape(-1)
     y = explanation_var[:, feat_idx]
@@ -213,7 +282,7 @@ for feat_idx in range(feature_ranges.shape[1]):
         alpha=0.6, edgecolor="k", linewidth=0.3
     )
     ax.set_xlabel("Conflict Ratio")
-    ax.set_ylabel("SHAP Explanation variability")
+    ax.set_ylabel("SHAP Explanation variance")
     ax.set_xlim(0, 0.5)
     ax.set_ylim(0, max_var)
     title = f"Feature {feature_names[feat_idx]}"
@@ -226,7 +295,7 @@ for feat_idx in range(feature_ranges.shape[1]):
     cbar.set_ticklabels(["0", ".25", ".5"])
 
     fig.tight_layout()
-    fig.savefig(f"plots_VAR/{feat_idx}_{feature_names[feat_idx]}.png", dpi=300, bbox_inches="tight")
+    fig.savefig(f"{dataset_name}_plots_VAR/{feat_idx}_{feature_names[feat_idx]}.png", dpi=300, bbox_inches="tight")
     plt.close(fig)
 
 # Korrelationen:
@@ -250,10 +319,10 @@ for j, feat_name in enumerate(feature_names):
         "r_var_range": round(r_var_range, 4),
     })
 df_corr = pd.DataFrame(results)
-df_corr.to_csv("correlations.csv", index=False)
+df_corr.to_csv(f"{dataset_name}_correlations.csv", index=False)
 
 
-# mean absolut SHAP values für no conflict and conflict points
+# mean absolut SHAP values für no conflict
 if no_conflict_shap & (not load_previous_data):
     idx = np.random.choice(len(non_conflict_indices), size=100, replace=False)
     subset = non_conflict_data[idx]
@@ -275,27 +344,13 @@ if no_conflict_shap & (not load_previous_data):
     plt.xticks(rotation=90)
     plt.ylabel("Mean absolute SHAP")
     plt.ylim(0, 0.25)
-    plt.title("Mean absolute SHAP per feature for non-conflict points")
+    plt.title(f"{dataset_name}: Mean absolute SHAP per feature for non-conflict points")
     plt.tight_layout()
-    plt.savefig("plots/no_conflict_mean_abs_shap_barplot.png", dpi=300, bbox_inches="tight")
+    plt.savefig(f"{dataset_name}_plots/no_conflict_mean_abs_shap_barplot.png", dpi=300, bbox_inches="tight")
     plt.close()
 
-    mean_abs_shap_per_feature = np.mean(np.abs(shap_values_all), axis=(0, 1))
-    mean_abs_df = pd.DataFrame({
-            "feature": feature_names,
-            "mean_abs_shap": mean_abs_shap_per_feature
-        }).sort_values("mean_abs_shap", ascending=False)
-
-    plt.figure()
-    plt.bar(mean_abs_df["feature"], mean_abs_df["mean_abs_shap"])
-    plt.xticks(rotation=90)
-    plt.ylabel("Mean absolute SHAP")
-    plt.ylim(0, 0.25)
-    plt.title("Mean absolute SHAP per feature for conflict points")
-    plt.tight_layout()
-    plt.savefig("plots/conflict_mean_abs_shap_barplot.png", dpi=300, bbox_inches="tight")
-    plt.close()
-
+"""
+# get shap plots for models if number of models is reasonably small
 if n_models <= 10 & (not load_previous_data):
     for i, shap_vals in enumerate(shap_values_all):
         shap.summary_plot(shap_vals, conflict_data, feature_names=feature_names, show=False)
@@ -304,3 +359,4 @@ if n_models <= 10 & (not load_previous_data):
         plt.tight_layout()
         plt.savefig(f"plots_SHAP_models/Model_{i+1}.png", dpi=300, bbox_inches="tight")
         plt.close()
+"""
