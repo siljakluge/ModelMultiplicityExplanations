@@ -2,7 +2,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-dataset_name = "ACSEmployment"
+dataset_name = "ACSEmployment_sizes"
 
 df = pd.read_csv(f"{dataset_name}_correlations.csv", index_col=0)
 if dataset_name == "ACSEmployment":
@@ -17,6 +17,9 @@ elif dataset_name == "ACSPublicCoverage":
         'ESR', 'PINCP', 'DIS', 'SEX', 'SCHL', 'MAR', 'AGEP', 'MIL', 'FER', 'RAC1P',
         'ESP', 'MIG', 'DREM', 'ANC', 'DEAR', 'DEYE', 'CIT', 'NATIVITY', 'ST'
     ]
+elif dataset_name == "ACSEmployment_sizes":
+    feature_order = ['AGEP', 'SCHL', 'DIS', 'RELP', 'MIL', 'SEX', 'MAR', 'DREM', 'ESP', 'RAC1P', 'ANC',
+ 'MIG', 'DEAR', 'CIT', 'DEYE', 'NATIVITY']
 
 df = df.loc[feature_order]
 

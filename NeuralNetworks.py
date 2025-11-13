@@ -32,6 +32,16 @@ features, label, group = ACSEmployment.df_to_numpy(acs_data)
 feature_names = ACSEmployment.features
 dataset_name = "ACSEmployment"
 -----------------------------------------------------------------
+ACSEmployment_sizes:
+Models: 98
+Best Accuracy: 0.8216
+Ambiguity: 0.2323
+Number of conflicting points: 125
+
+features, label, group = ACSEmployment.df_to_numpy(acs_data)
+feature_names = ACSEmployment.features
+dataset_name = "ACSEmployment"
+-----------------------------------------------------------------
 ACSIncome:
 Models: 98
 Best Accuracy: 0.8112
@@ -53,9 +63,9 @@ feature_names = ACSPublicCoverage.features
 dataset_name = "ACSPublicCoverage"
 -----------------------------------------------------------------
 """
-features, label, group = ACSIncome.df_to_numpy(acs_data)
-feature_names = ACSIncome.features
-dataset_name = "ACSIncome"
+features, label, group = ACSEmployment.df_to_numpy(acs_data)
+feature_names = ACSEmployment.features
+dataset_name = "ACSEmployment_sizes"
 
 # anpassen:
 n_models = 100
@@ -64,9 +74,18 @@ n_shap_samples = 100
 no_conflict_shap = False
 save_data = True
 load_previous_data = False
+vary_sizes = True
+
 
 def create_mlp():
-    classifier = MLPClassifier(hidden_layer_sizes=(64,32), early_stopping=True)
+    if vary_sizes:
+        number_layers = np.random.randint(2, 9)
+        layers = np.random.randint(2, 100, size = number_layers)
+        #print(layers)
+    else:
+        layers = (64,32)
+
+    classifier = MLPClassifier(hidden_layer_sizes=layers, early_stopping=True)
     return make_pipeline(StandardScaler(), classifier)
 
 def rashomon_set(n_models=50, tolerance=0.01, base_seed=11):
