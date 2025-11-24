@@ -40,7 +40,7 @@ Number of conflicting points: 125
 
 features, label, group = ACSEmployment.df_to_numpy(acs_data)
 feature_names = ACSEmployment.features
-dataset_name = "ACSEmployment"
+dataset_name = "ACSEmployment_sizes"
 -----------------------------------------------------------------
 ACSIncome:
 Models: 98
@@ -65,16 +65,16 @@ dataset_name = "ACSPublicCoverage"
 """
 features, label, group = ACSEmployment.df_to_numpy(acs_data)
 feature_names = ACSEmployment.features
-dataset_name = "ACSEmployment_sizes"
+dataset_name = "ACSEmployment"
 
 # anpassen:
 n_models = 100
 n_datapoints = 500
 n_shap_samples = 100
 no_conflict_shap = False
-save_data = True
-load_previous_data = False
-vary_sizes = True
+save_data = False
+load_previous_data = True
+vary_sizes = False
 
 
 def create_mlp():
@@ -131,6 +131,69 @@ def conflict_rate(classifiers, points):
     rate = np.minimum(p, 1 - p)
     conflict_indices = np.where(rate > 0)[0]
     return rate, conflict_indices
+
+def include_prediction(classifiers, points, shap_values, final_rate):
+    shap_values = np.array(shap_values)
+    shap_pos_pred = []
+    idx_pos_pred = []
+    shap_neg_pred = []
+    idx_neg_pred = []
+    for i, m in enumerate(classifiers):
+        for j, p in enumerate(points):
+            if m.predict(p.reshape(1, -1))[0] == 1:
+                idx_pos_pred.append(j)
+                shap_pos_pred.append(shap_values[i, :, j])
+            else:
+                idx_neg_pred.append(j)
+                shap_neg_pred.append(shap_values[i, :, j])
+
+    # Explanation Range Plot for pred == 1
+    shap_pos_min = shap_pos_pred.min(axis=0)
+    shap_pos_max = shap_pos_pred.max(axis=0)
+    shap_pos_range = shap_pos_max - shap_pos_min
+    max_pos_range = shap_pos_range.max(axis=1).max()
+    os.makedirs(f"{dataset_name}_plots_RANGE_pos", exist_ok=True)
+    for feat_idx in range(feature_ranges.shape[1]):
+        x = np.asarray(final_rate[idx_pos_pred]).reshape(-1)
+        y = shap_pos_range[:, feat_idx]
+        corr = np.corrcoef(x, y)[0, 1] if (x.std() > 0 and y.std() > 0) else np.nan
+        fig, ax = plt.subplots()
+        ax.scatter(x, y)
+        ax.set_xlabel("Conflict Ratio")
+        ax.set_ylabel("SHAP Explanation Range")
+        ax.set_xlim(0, 0.5)
+        ax.set_ylim(0, max_pos_range)
+        title = f"Feature {feature_names[feat_idx]} for points with pred == 1"
+        if np.isfinite(corr): title += f", (r = {corr:.3f})"
+        ax.set_title(title)
+        fig.tight_layout()
+        fig.savefig(f"{dataset_name}_plots_RANGE_pos/{feat_idx}_{feature_names[feat_idx]}.png", dpi=300,
+                    bbox_inches="tight")
+        plt.close(fig)
+    # Explanation Range Plot for pred == 0
+    shap_neg_min = shap_neg_pred.min(axis=0)
+    shap_neg_max = shap_neg_pred.max(axis=0)
+    shap_neg_range = shap_neg_max - shap_neg_min
+    max_neg_range = shap_neg_range.max(axis=1).max()
+    os.makedirs(f"{dataset_name}_plots_RANGE_neg", exist_ok=True)
+    for feat_idx in range(feature_ranges.shape[1]):
+        x = np.asarray(final_rate[idx_neg_pred]).reshape(-1)
+        y = shap_pos_range[:, feat_idx]
+        corr = np.corrcoef(x, y)[0, 1] if (x.std() > 0 and y.std() > 0) else np.nan
+        fig, ax = plt.subplots()
+        ax.scatter(x, y)
+        ax.set_xlabel("Conflict Ratio")
+        ax.set_ylabel("SHAP Explanation Range")
+        ax.set_xlim(0, 0.5)
+        ax.set_ylim(0, max_neg_range)
+        title = f"Feature {feature_names[feat_idx]} for points with pred == 0"
+        if np.isfinite(corr): title += f", (r = {corr:.3f})"
+        ax.set_title(title)
+        fig.tight_layout()
+        fig.savefig(f"{dataset_name}_plots_RANGE_neg/{feat_idx}_{feature_names[feat_idx]}.png", dpi=300,
+                    bbox_inches="tight")
+        plt.close(fig)
+
 
 if load_previous_data:
     if dataset_name == "ACSEmployment":
@@ -242,12 +305,6 @@ max_range = feature_ranges.max(axis=1).max()
 print("Average range per feature:", feature_ranges.mean(axis=0))
 print("Max SHAP Range: ", round(max_range, 4))
 
-# abs max SHAP Value pro Feature
-shap_min_feature = shap_min.min(axis=0)
-shap_max_feature = shap_max.max(axis=0)
-abs_max_feature = np.maximum(np.abs(shap_min_feature), np.abs(shap_max_feature))
-print("abs max feature: ", abs_max_feature)
-
 # Variance
 explanation_var = shap_values_all.var(axis=0)
 max_var = explanation_var.max(axis=1).max()
@@ -340,6 +397,7 @@ for j, feat_name in enumerate(feature_names):
 df_corr = pd.DataFrame(results)
 df_corr.to_csv(f"{dataset_name}_correlations.csv", index=False)
 
+include_prediction(rashomon_models, conflict_data, shap_values_all, final_rate)
 
 # mean absolut SHAP values für no conflict
 if no_conflict_shap & (not load_previous_data):
