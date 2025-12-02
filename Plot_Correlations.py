@@ -2,7 +2,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-dataset_name = "ACSEmployment_sizes"
+dataset_name = "ACSEmployment"
 
 df = pd.read_csv(f"{dataset_name}_correlations.csv", index_col=0)
 if dataset_name == "ACSEmployment":
