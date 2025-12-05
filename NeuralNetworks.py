@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import shap
-from pandas.io.sas.sas_constants import dataset_length
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 from sklearn.neural_network import MLPClassifier
@@ -10,7 +9,8 @@ from sklearn.pipeline import make_pipeline
 import numpy as np
 import os
 import pandas as pd
-from scipy.stats import pearsonr
+from scipy.stats import pearsonr, spearmanr
+import seaborn as sns
 
 from folktables import ACSDataSource, ACSEmployment, ACSIncome, ACSPublicCoverage
 
@@ -63,9 +63,9 @@ feature_names = ACSPublicCoverage.features
 dataset_name = "ACSPublicCoverage"
 -----------------------------------------------------------------
 """
-features, label, group = ACSEmployment.df_to_numpy(acs_data)
-feature_names = ACSEmployment.features
-dataset_name = "ACSEmployment"
+features, label, group = ACSPublicCoverage.df_to_numpy(acs_data)
+feature_names = ACSPublicCoverage.features
+dataset_name = "ACSPublicCoverage"
 
 # anpassen:
 n_models = 100
@@ -132,69 +132,6 @@ def conflict_rate(classifiers, points):
     conflict_indices = np.where(rate > 0)[0]
     return rate, conflict_indices
 
-def include_prediction(classifiers, points, shap_values, final_rate):
-    shap_values = np.array(shap_values)
-    shap_pos_pred = []
-    idx_pos_pred = []
-    shap_neg_pred = []
-    idx_neg_pred = []
-    for i, m in enumerate(classifiers):
-        for j, p in enumerate(points):
-            if m.predict(p.reshape(1, -1))[0] == 1:
-                idx_pos_pred.append(j)
-                shap_pos_pred.append(shap_values[i, :, j])
-            else:
-                idx_neg_pred.append(j)
-                shap_neg_pred.append(shap_values[i, :, j])
-
-    # Explanation Range Plot for pred == 1
-    shap_pos_min = shap_pos_pred.min(axis=0)
-    shap_pos_max = shap_pos_pred.max(axis=0)
-    shap_pos_range = shap_pos_max - shap_pos_min
-    max_pos_range = shap_pos_range.max(axis=1).max()
-    os.makedirs(f"{dataset_name}_plots_RANGE_pos", exist_ok=True)
-    for feat_idx in range(feature_ranges.shape[1]):
-        x = np.asarray(final_rate[idx_pos_pred]).reshape(-1)
-        y = shap_pos_range[:, feat_idx]
-        corr = np.corrcoef(x, y)[0, 1] if (x.std() > 0 and y.std() > 0) else np.nan
-        fig, ax = plt.subplots()
-        ax.scatter(x, y)
-        ax.set_xlabel("Conflict Ratio")
-        ax.set_ylabel("SHAP Explanation Range")
-        ax.set_xlim(0, 0.5)
-        ax.set_ylim(0, max_pos_range)
-        title = f"Feature {feature_names[feat_idx]} for points with pred == 1"
-        if np.isfinite(corr): title += f", (r = {corr:.3f})"
-        ax.set_title(title)
-        fig.tight_layout()
-        fig.savefig(f"{dataset_name}_plots_RANGE_pos/{feat_idx}_{feature_names[feat_idx]}.png", dpi=300,
-                    bbox_inches="tight")
-        plt.close(fig)
-    # Explanation Range Plot for pred == 0
-    shap_neg_min = shap_neg_pred.min(axis=0)
-    shap_neg_max = shap_neg_pred.max(axis=0)
-    shap_neg_range = shap_neg_max - shap_neg_min
-    max_neg_range = shap_neg_range.max(axis=1).max()
-    os.makedirs(f"{dataset_name}_plots_RANGE_neg", exist_ok=True)
-    for feat_idx in range(feature_ranges.shape[1]):
-        x = np.asarray(final_rate[idx_neg_pred]).reshape(-1)
-        y = shap_pos_range[:, feat_idx]
-        corr = np.corrcoef(x, y)[0, 1] if (x.std() > 0 and y.std() > 0) else np.nan
-        fig, ax = plt.subplots()
-        ax.scatter(x, y)
-        ax.set_xlabel("Conflict Ratio")
-        ax.set_ylabel("SHAP Explanation Range")
-        ax.set_xlim(0, 0.5)
-        ax.set_ylim(0, max_neg_range)
-        title = f"Feature {feature_names[feat_idx]} for points with pred == 0"
-        if np.isfinite(corr): title += f", (r = {corr:.3f})"
-        ax.set_title(title)
-        fig.tight_layout()
-        fig.savefig(f"{dataset_name}_plots_RANGE_neg/{feat_idx}_{feature_names[feat_idx]}.png", dpi=300,
-                    bbox_inches="tight")
-        plt.close(fig)
-
-
 if load_previous_data:
     if dataset_name == "ACSEmployment":
         shap_values_all = np.load("ACSEmployment_previous data/shap_values_all.npy")
@@ -205,6 +142,9 @@ if load_previous_data:
     elif dataset_name == "ACSPublicCoverage":
         shap_values_all = np.load("ACSPublicCoverage_previous data/shap_values_all.npy")
         final_rate = np.load("ACSPublicCoverage_previous data/conflict_rate.npy")
+    elif dataset_name == "ACSEmployment_sizes":
+        shap_values_all = np.load("ACSEmployment_sizes data/shap_values_all.npy")
+        final_rate = np.load("ACSEmployment_sizes data/conflict_rate.npy")
 
 else:
     rashomon_models, (X_val, y_val), acc = rashomon_set(n_models=n_models, tolerance=0.015, base_seed=11)
@@ -243,6 +183,12 @@ else:
     shap_values_all = np.array(shap_values_all)
     print(shap_values_all.shape)
 
+# remove feature ST in ACSPublicCoverage
+if dataset_name == "ACSPublicCoverage":
+    k = 16  #index of  ST
+    shap_values_all = np.delete(shap_values_all, k, axis=2)
+    feature_names.pop(k)
+
 # plot mean absolut SHAP values für conflict points
 os.makedirs(f"{dataset_name}_plots", exist_ok=True)
 mean_abs_shap_per_feature = np.mean(np.abs(shap_values_all), axis=(0, 1))
@@ -259,6 +205,44 @@ plt.ylim(0, 0.25)
 plt.title(f" {dataset_name}: Mean absolute SHAP per feature for conflict points")
 plt.tight_layout()
 plt.savefig(f"{dataset_name}_plots/conflict_mean_abs_shap_barplot.png", dpi=300, bbox_inches="tight")
+plt.close()
+
+# feature Rankings
+mean_abs_shap_per_model = np.mean(np.abs(shap_values_all), axis=1)
+ranks = np.argsort(-mean_abs_shap_per_model, axis=1)
+n_models, n_features = mean_abs_shap_per_model.shape
+feature_ranks = np.zeros((n_models, n_features), dtype=int)
+for m in range(n_models):
+    feature_ranks[m, ranks[m]] = np.arange(1, n_features + 1)
+rank_range = feature_ranks.max(axis=0) - feature_ranks.min(axis=0)
+df_rank = pd.DataFrame({
+    "feature": feature_names,
+    "min_rank": feature_ranks.min(axis=0),
+    "max_rank": feature_ranks.max(axis=0),
+    "rank_range": rank_range,
+    "mean_rank": feature_ranks.mean(axis=0),
+    "overall_mean_abs_shap": np.mean(np.abs(shap_values_all), axis=(0,1))
+}).sort_values("rank_range", ascending=False)
+df_violin = pd.DataFrame(feature_ranks, columns=feature_names)
+df_violin = df_violin.melt(var_name="feature", value_name="rank")
+order = df_violin.groupby("feature")["rank"].mean().sort_values().index
+
+plt.figure(figsize=(14, 6))
+ax = sns.violinplot(
+    data=df_violin,
+    x="feature",
+    y="rank",
+    order=order,
+    inner="quartile",
+    cut=0
+)
+ax.set_yticks(np.arange(1, len(feature_names) + 1, 1))
+
+plt.xticks(rotation=90)
+plt.ylabel("Rank (1 = most important)")
+plt.title("Distribution of Feature Rankings Across Models")
+plt.tight_layout()
+plt.savefig(f"{dataset_name}_plots/feature_ranking.png", dpi=300, bbox_inches="tight")
 plt.close()
 
 # VZ-Wechsel
@@ -379,12 +363,12 @@ x_conflict = np.asarray(final_rate).reshape(-1)
 n_samples, n_features = disagreement.shape
 results = []
 for j, feat_name in enumerate(feature_names):
-    r_conflict_dis, _ = pearsonr(x_conflict, disagreement[:, j])
-    r_var_dis, _ = pearsonr(explanation_var[:, j], disagreement[:, j])
-    r_range_dis, _ = pearsonr(feature_ranges[:, j], disagreement[:, j])
-    r_conflict_var, _   = pearsonr(x_conflict, explanation_var[:, j])
-    r_conflict_range, _ = pearsonr(x_conflict, feature_ranges[:, j])
-    r_var_range, _ = pearsonr(explanation_var[:, j], feature_ranges[:, j])
+    r_conflict_dis, _ = spearmanr(x_conflict, disagreement[:, j])
+    r_var_dis, _ = spearmanr(explanation_var[:, j], disagreement[:, j])
+    r_range_dis, _ = spearmanr(feature_ranges[:, j], disagreement[:, j])
+    r_conflict_var, _   = spearmanr(x_conflict, explanation_var[:, j])
+    r_conflict_range, _ = spearmanr(x_conflict, feature_ranges[:, j])
+    r_var_range, _ = spearmanr(explanation_var[:, j], feature_ranges[:, j])
     results.append({
         "feature_name": feat_name,
         "r_conflict_disagreement": round(r_conflict_dis, 4),
@@ -396,8 +380,6 @@ for j, feat_name in enumerate(feature_names):
     })
 df_corr = pd.DataFrame(results)
 df_corr.to_csv(f"{dataset_name}_correlations.csv", index=False)
-
-include_prediction(rashomon_models, conflict_data, shap_values_all, final_rate)
 
 # mean absolut SHAP values für no conflict
 if no_conflict_shap & (not load_previous_data):
@@ -426,7 +408,7 @@ if no_conflict_shap & (not load_previous_data):
     plt.savefig(f"{dataset_name}_plots/no_conflict_mean_abs_shap_barplot.png", dpi=300, bbox_inches="tight")
     plt.close()
 
-"""
+
 # get shap plots for models if number of models is reasonably small
 if n_models <= 10 & (not load_previous_data):
     for i, shap_vals in enumerate(shap_values_all):
@@ -436,4 +418,3 @@ if n_models <= 10 & (not load_previous_data):
         plt.tight_layout()
         plt.savefig(f"plots_SHAP_models/Model_{i+1}.png", dpi=300, bbox_inches="tight")
         plt.close()
-"""
