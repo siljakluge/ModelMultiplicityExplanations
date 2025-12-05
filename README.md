@@ -5,4 +5,3 @@ Bachelorarbeit Silja Kluge
 ## Experiment 1 (LinClassifier.py)
 
 ## Experiment 2 (NeuralNetworks.py)
--> Plots (plot_VAR + plot_RANGE)
