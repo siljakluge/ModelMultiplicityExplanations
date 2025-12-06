@@ -40,7 +40,7 @@ Number of conflicting points: 125
 
 features, label, group = ACSEmployment.df_to_numpy(acs_data)
 feature_names = ACSEmployment.features
-dataset_name = "ACSEmployment_sizes"
+dataset_name = "ACSEmployment_size_var"
 -----------------------------------------------------------------
 ACSIncome:
 Models: 98
@@ -142,9 +142,9 @@ if load_previous_data:
     elif dataset_name == "ACSPublicCoverage":
         shap_values_all = np.load("ACSPublicCoverage_previous data/shap_values_all.npy")
         final_rate = np.load("ACSPublicCoverage_previous data/conflict_rate.npy")
-    elif dataset_name == "ACSEmployment_sizes":
-        shap_values_all = np.load("ACSEmployment_sizes data/shap_values_all.npy")
-        final_rate = np.load("ACSEmployment_sizes data/conflict_rate.npy")
+    elif dataset_name == "ACSEmployment_size_var":
+        shap_values_all = np.load("ACSEmployment_sizes_previous data/shap_values_all.npy")
+        final_rate = np.load("ACSEmployment_sizes_previous data/conflict_rate.npy")
 
 else:
     rashomon_models, (X_val, y_val), acc = rashomon_set(n_models=n_models, tolerance=0.015, base_seed=11)
@@ -200,9 +200,11 @@ mean_abs_df = pd.DataFrame({
 plt.figure()
 plt.bar(mean_abs_df["feature"], mean_abs_df["mean_abs_shap"])
 plt.xticks(rotation=90)
+plt.xlabel("Feature")
+plt.ylabel("Mean Absolute Shap value")
 plt.ylabel("Mean absolute SHAP")
-plt.ylim(0, 0.25)
-plt.title(f" {dataset_name}: Mean absolute SHAP per feature for conflict points")
+plt.ylim(0, 0.2)
+plt.title(f" {dataset_name}: Mean Absolute SHAP per Feature for Conflict Points")
 plt.tight_layout()
 plt.savefig(f"{dataset_name}_plots/conflict_mean_abs_shap_barplot.png", dpi=300, bbox_inches="tight")
 plt.close()
@@ -228,20 +230,29 @@ df_violin = df_violin.melt(var_name="feature", value_name="rank")
 order = df_violin.groupby("feature")["rank"].mean().sort_values().index
 
 plt.figure(figsize=(14, 6))
-ax = sns.violinplot(
+ax = sns.boxplot(
     data=df_violin,
     x="feature",
     y="rank",
     order=order,
-    inner="quartile",
-    cut=0
+    showfliers=False,
 )
-ax.set_yticks(np.arange(1, len(feature_names) + 1, 1))
+sns.stripplot(
+    data=df_violin,
+    x="feature",
+    y="rank",
+    order=order,
+    color="black",
+    size=3,
+    alpha=0.6
+)
 
+ax.set_yticks(np.arange(1, len(feature_names) + 1, 1))
 plt.xticks(rotation=90)
-plt.ylabel("Rank (1 = most important)")
+plt.ylabel("rank (1 = most important)")
 plt.title("Distribution of Feature Rankings Across Models")
 plt.tight_layout()
+
 plt.savefig(f"{dataset_name}_plots/feature_ranking.png", dpi=300, bbox_inches="tight")
 plt.close()
 
@@ -263,9 +274,9 @@ cmap = mcolors.LinearSegmentedColormap.from_list("signinstability", ["green", "y
 row_labels = [str(i) for i in range(frac_pos_sorted.shape[0])]
 fig, ax = plt.subplots(figsize=(min(12, 1.0 + 0.4*frac_pos_sorted.shape[1]), 8))
 im = ax.imshow(sign_instability_sorted, aspect="auto", vmin=0, vmax=1, cmap=cmap)
-ax.set_title(f"{dataset_name}: Sign Instability per conflict point × feature")
-ax.set_xlabel("Features")
-ax.set_ylabel("Conflict Points")
+ax.set_title(f"{dataset_name}: Sign Instability per Conflict Point × Feature")
+ax.set_xlabel("features")
+ax.set_ylabel("conflict points")
 ax.set_xticks(np.arange(frac_pos_sorted.shape[1]))
 ax.set_xticklabels(sorted_features, rotation=90)
 step = max(1, frac_pos_sorted.shape[0] // 25)
@@ -273,9 +284,9 @@ ax.set_yticks(np.arange(0, frac_pos_sorted.shape[0], step))
 ax.set_yticklabels([row_labels[i] for i in range(0, frac_pos_sorted.shape[0], step)])
 
 cbar = fig.colorbar(im, ax=ax)
-cbar.set_label("Sign Instability (0 = stable, 0.5 = unstable)")
+cbar.set_label("sign instability (0 = stable, 0.5 = unstable)")
 cbar.set_ticks([0, 0.5, 1])
-cbar.set_ticklabels(["Stable", "Medium", "Unstable"])
+cbar.set_ticklabels(["stable", "medium", "unstable"])
 
 fig.tight_layout()
 fig.savefig(f"{dataset_name}_plots/heatmap_sign_instability.png", dpi=300, bbox_inches="tight")
@@ -300,7 +311,7 @@ for feat_idx in range(feature_ranges.shape[1]):
     x = np.asarray(final_rate).reshape(-1)
     y = feature_ranges[:, feat_idx]
 
-    corr = np.corrcoef(x, y)[0, 1] if (x.std()>0 and y.std()>0) else np.nan
+    corr, _ = spearmanr(x,y) if (x.std()>0 and y.std()>0) else np.nan
 
     fig, ax = plt.subplots()
     sc = ax.scatter(
@@ -309,16 +320,16 @@ for feat_idx in range(feature_ranges.shape[1]):
         cmap=cmap, norm=mcolors.Normalize(vmin=0, vmax=1),
         alpha=0.6, edgecolor="k", linewidth=0.3
     )
-    ax.set_xlabel("Conflict Ratio")
-    ax.set_ylabel("SHAP Explanation Range")
+    ax.set_xlabel("conflict ratio")
+    ax.set_ylabel("SHAP explanation range")
     ax.set_xlim(0, 0.5)
     ax.set_ylim(0, max_range)
     title = f"Feature {feature_names[feat_idx]}"
-    if np.isfinite(corr): title += f", (r = {corr:.3f})"
+    if np.isfinite(corr): title += f", (spearman_r = {corr:.3f})"
     ax.set_title(title)
 
     cbar = fig.colorbar(sc, ax=ax)
-    cbar.set_label("Sign Instability")
+    cbar.set_label("sign instability")
     cbar.set_ticks([0, 0.5, 1])
     cbar.set_ticklabels(["0", ".25", ".5"])
 
@@ -332,7 +343,7 @@ for feat_idx in range(feature_ranges.shape[1]):
     x = np.asarray(final_rate).reshape(-1)
     y = explanation_var[:, feat_idx]
 
-    corr = np.corrcoef(x, y)[0, 1] if (x.std()>0 and y.std()>0) else np.nan
+    corr, _ = spearmanr(x,y) if (x.std()>0 and y.std()>0) else np.nan
 
     fig, ax = plt.subplots()
     sc = ax.scatter(
@@ -341,16 +352,16 @@ for feat_idx in range(feature_ranges.shape[1]):
         cmap=cmap,norm=mcolors.Normalize(vmin=0, vmax=1),
         alpha=0.6, edgecolor="k", linewidth=0.3
     )
-    ax.set_xlabel("Conflict Ratio")
-    ax.set_ylabel("SHAP Explanation variance")
+    ax.set_xlabel("conflict ratio")
+    ax.set_ylabel("SHAP explanation variance")
     ax.set_xlim(0, 0.5)
     ax.set_ylim(0, max_var)
     title = f"Feature {feature_names[feat_idx]}"
-    if np.isfinite(corr): title += f", (r = {corr:.3f})"
+    if np.isfinite(corr): title += f", (spearman_r = {corr:.3f})"
     ax.set_title(title)
 
     cbar = fig.colorbar(sc, ax=ax)
-    cbar.set_label("Sign Instability")
+    cbar.set_label("sign instability")
     cbar.set_ticks([0, 0.5, 1])
     cbar.set_ticklabels(["0", ".25", ".5"])
 
