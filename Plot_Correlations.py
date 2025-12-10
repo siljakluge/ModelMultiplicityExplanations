@@ -2,7 +2,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-dataset_name = "ACSPublicCoverage"
+dataset_name = "ACSEmployment_size_var"
 
 df = pd.read_csv(f"{dataset_name}_correlations.csv", index_col=0)
 if dataset_name == "ACSEmployment":
@@ -32,7 +32,15 @@ rename_dict = {
 }
 df = df.rename(columns=rename_dict)
 
-plt.figure(figsize=(10, 8))
+plt.rcParams.update({
+    "font.size": 12,        # default text size
+    "axes.labelsize": 14,   # x/y labels
+    "axes.titlesize": 15,   # plot titles
+    "xtick.labelsize": 12,  # x-tick labels
+    "ytick.labelsize": 12,  # y-tick labels
+    "legend.fontsize": 12
+})
+plt.figure(figsize=(12, 8))
 ax = sns.heatmap(
     df.abs(),
     vmin=0, vmax=1,
@@ -40,8 +48,11 @@ ax = sns.heatmap(
     annot=df,
     fmt=".4f",
 )
+cbar = ax.collections[0].colorbar
+cbar.set_label("absolute correlation strength", fontsize=12)
 
 ax.xaxis.set_ticks_position('top')
+plt.ylabel("feature")
 ax.xaxis.set_label_position('top')
 
 

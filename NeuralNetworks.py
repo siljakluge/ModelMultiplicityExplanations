@@ -63,9 +63,9 @@ feature_names = ACSPublicCoverage.features
 dataset_name = "ACSPublicCoverage"
 -----------------------------------------------------------------
 """
-features, label, group = ACSPublicCoverage.df_to_numpy(acs_data)
-feature_names = ACSPublicCoverage.features
-dataset_name = "ACSPublicCoverage"
+features, label, group = ACSIncome.df_to_numpy(acs_data)
+feature_names = ACSIncome.features
+dataset_name = "ACSIncome"
 
 # anpassen:
 n_models = 100
@@ -75,6 +75,15 @@ no_conflict_shap = False
 save_data = False
 load_previous_data = True
 vary_sizes = False
+
+plt.rcParams.update({
+    "font.size": 12,        # default text size
+    "axes.labelsize": 14,   # x/y labels
+    "axes.titlesize": 15,   # plot titles
+    "xtick.labelsize": 12,  # x-tick labels
+    "ytick.labelsize": 12,  # y-tick labels
+    "legend.fontsize": 12
+})
 
 
 def create_mlp():
@@ -200,15 +209,22 @@ mean_abs_df = pd.DataFrame({
 plt.figure()
 plt.bar(mean_abs_df["feature"], mean_abs_df["mean_abs_shap"])
 plt.xticks(rotation=90)
-plt.xlabel("Feature")
-plt.ylabel("Mean Absolute Shap value")
-plt.ylabel("Mean absolute SHAP")
+plt.xlabel("feature")
+plt.ylabel("mean absolute SHAP value")
 plt.ylim(0, 0.2)
-plt.title(f" {dataset_name}: Mean Absolute SHAP per Feature for Conflict Points")
+plt.title(f" {dataset_name}: Mean Absolute SHAP Values")
 plt.tight_layout()
 plt.savefig(f"{dataset_name}_plots/conflict_mean_abs_shap_barplot.png", dpi=300, bbox_inches="tight")
 plt.close()
 
+plt.rcParams.update({
+    "font.size": 19,        # default text size
+    "axes.labelsize": 20,   # x/y labels
+    "axes.titlesize": 24,   # plot titles
+    "xtick.labelsize": 22,  # x-tick labels
+    "ytick.labelsize": 16,  # y-tick labels
+    "legend.fontsize": 19
+})
 # feature Rankings
 mean_abs_shap_per_model = np.mean(np.abs(shap_values_all), axis=1)
 ranks = np.argsort(-mean_abs_shap_per_model, axis=1)
@@ -229,12 +245,13 @@ df_violin = pd.DataFrame(feature_ranks, columns=feature_names)
 df_violin = df_violin.melt(var_name="feature", value_name="rank")
 order = df_violin.groupby("feature")["rank"].mean().sort_values().index
 
-plt.figure(figsize=(14, 6))
+plt.figure(figsize=(15, 5.2))
 ax = sns.boxplot(
     data=df_violin,
     x="feature",
     y="rank",
     order=order,
+    width=0.7,
     showfliers=False,
 )
 sns.stripplot(
@@ -244,18 +261,27 @@ sns.stripplot(
     order=order,
     color="black",
     size=3,
-    alpha=0.6
+    alpha=0.6,
+    dodge=False
 )
 
 ax.set_yticks(np.arange(1, len(feature_names) + 1, 1))
 plt.xticks(rotation=90)
 plt.ylabel("rank (1 = most important)")
-plt.title("Distribution of Feature Rankings Across Models")
+plt.title(f" {dataset_name}: Distribution of Feature Rankings")
 plt.tight_layout()
 
 plt.savefig(f"{dataset_name}_plots/feature_ranking.png", dpi=300, bbox_inches="tight")
 plt.close()
 
+plt.rcParams.update({
+    "font.size": 12,        # default text size
+    "axes.labelsize": 14,   # x/y labels
+    "axes.titlesize": 15,   # plot titles
+    "xtick.labelsize": 12,  # x-tick labels
+    "ytick.labelsize": 12,  # y-tick labels
+    "legend.fontsize": 12
+})
 # VZ-Wechsel
 frac_pos = (shap_values_all > 0).mean(axis=0)
 disagreement = np.minimum(frac_pos, 1 - frac_pos)
@@ -267,14 +293,14 @@ print("sorted_features:", sorted_features)
 sort_idx = [feature_names.index(f) for f in sorted_features]
 sign_instability_sorted = sign_instability[:, sort_idx]
 frac_pos_sorted = frac_pos[:, sort_idx]
+#print(sign_instability.shape, final_rate.shape)
 
-# Plot Heatmap Sign Instability:
-cmap = mcolors.LinearSegmentedColormap.from_list("signinstability", ["green", "yellow", "red"])
+cmap = mcolors.LinearSegmentedColormap.from_list("signinstability", ["yellow", "green", "blue"])
 
 row_labels = [str(i) for i in range(frac_pos_sorted.shape[0])]
 fig, ax = plt.subplots(figsize=(min(12, 1.0 + 0.4*frac_pos_sorted.shape[1]), 8))
 im = ax.imshow(sign_instability_sorted, aspect="auto", vmin=0, vmax=1, cmap=cmap)
-ax.set_title(f"{dataset_name}: Sign Instability per Conflict Point × Feature")
+ax.set_title(f"{dataset_name}: Sign Instability")
 ax.set_xlabel("features")
 ax.set_ylabel("conflict points")
 ax.set_xticks(np.arange(frac_pos_sorted.shape[1]))
@@ -324,7 +350,7 @@ for feat_idx in range(feature_ranges.shape[1]):
     ax.set_ylabel("SHAP explanation range")
     ax.set_xlim(0, 0.5)
     ax.set_ylim(0, max_range)
-    title = f"Feature {feature_names[feat_idx]}"
+    title = f"{feature_names[feat_idx]}: SHAP Explanation Range"
     if np.isfinite(corr): title += f", (spearman_r = {corr:.3f})"
     ax.set_title(title)
 
@@ -356,7 +382,7 @@ for feat_idx in range(feature_ranges.shape[1]):
     ax.set_ylabel("SHAP explanation variance")
     ax.set_xlim(0, 0.5)
     ax.set_ylim(0, max_var)
-    title = f"Feature {feature_names[feat_idx]}"
+    title = f"{feature_names[feat_idx]}: SHAP Explanation Variance"
     if np.isfinite(corr): title += f", (spearman_r = {corr:.3f})"
     ax.set_title(title)
 
